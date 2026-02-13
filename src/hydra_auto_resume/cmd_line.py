@@ -69,45 +69,58 @@ def bootstrap(
             new_args.append(f"++{config_ckpt_path_key}={path_val}")
 
         elif path_val.is_dir():
-            print(f"[HydraAutoResume] Resuming from Directory: {resume_val}")
-            # Case B: Directory -> In-Place Resume, Old Config, Append Logs
             log_dir = path_val
 
-            # 1. Force Hydra to run in the same directory
-            new_args.append(f"hydra.run.dir={log_dir}")
-
-            # 2. Find checkpoint
-            ckpt_path = None
-            for name in checkpoint_names:
-                if (log_dir / checkpoint_dir / name).exists():
-                    ckpt_path = str(log_dir / checkpoint_dir / name)
-                    break
-            if ckpt_path:
-                new_args.append(f"++{config_ckpt_path_key}={ckpt_path}")
-
-            # 3. Load config overrides from hydra.yaml
-            hydra_yaml = log_dir / ".hydra" / "hydra.yaml"
-            if hydra_yaml.exists():
-                try:
-                    hydra_cfg = OmegaConf.load(hydra_yaml)
-                    overrides = hydra_cfg.hydra.overrides.task
-                    print(f"[HydraAutoResume] Loaded from previous run: {overrides}")
-                    for arg in overrides:
-                        if "=" in arg:
-                            key = arg.split("=")[0]
-                            # Only add if user didn't explicitly set it in current cmd
-                            if key not in user_keys and "resume" not in key:
-                                new_args.append(arg)
-                except Exception as e:
+            # Check for multirun
+            if (log_dir / "multirun.yaml").exists():
+                print(f"[HydraAutoResume] Resuming from Multirun Directory: {resume_val}")
+                new_args.append(f"hydra.sweep.dir={log_dir}")
+                if "-m" not in sys.argv and "--multirun" not in sys.argv:
                     print(
-                        "[HydraAutoResume] Warning:"
-                        f"Failed to load overrides from {hydra_yaml}: {e}"
+                        "[HydraAutoResume] Warning: Resuming a multirun but '-m' flag is missing."
+                        " Please add '-m' to your command."
                     )
+            else:
+                print(f"[HydraAutoResume] Resuming from Directory: {resume_val}")
+                # Case B: Directory -> In-Place Resume, Old Config, Append Logs
 
-            # 4. Recover WandB ID to resume the same run
-            wandb_id = recover_id_from_dir(log_dir, checkpoint_dir_name=checkpoint_dir)
-            if wandb_id:
-                new_args.append(f"++{config_wandb_id_key}={wandb_id}")
+                # 1. Force Hydra to run in the same directory
+                new_args.append(f"hydra.run.dir={log_dir}")
+
+                # 2. Find checkpoint
+                ckpt_path = None
+                for name in checkpoint_names:
+                    if (log_dir / checkpoint_dir / name).exists():
+                        ckpt_path = str(log_dir / checkpoint_dir / name)
+                        break
+                if ckpt_path:
+                    new_args.append(f"++{config_ckpt_path_key}={ckpt_path}")
+
+                # 3. Load config overrides from hydra.yaml
+                hydra_yaml = log_dir / ".hydra" / "hydra.yaml"
+                if hydra_yaml.exists():
+                    try:
+                        hydra_cfg = OmegaConf.load(hydra_yaml)
+                        overrides = hydra_cfg.hydra.overrides.task
+                        print(f"[HydraAutoResume] Loaded from previous run: {overrides}")
+                        for arg in overrides:
+                            if "=" in arg:
+                                key = arg.split("=")[0]
+                                # Only add if user didn't explicitly set it in current cmd
+                                if key not in user_keys and "resume" not in key:
+                                    new_args.append(arg)
+                    except Exception as e:
+                        print(
+                            "[HydraAutoResume] Warning:"
+                            f"Failed to load overrides from {hydra_yaml}: {e}"
+                        )
+
+                # 4. Recover WandB ID to resume the same run
+                wandb_id = recover_id_from_dir(
+                    log_dir, checkpoint_dir_name=checkpoint_dir
+                )
+                if wandb_id:
+                    new_args.append(f"++{config_wandb_id_key}={wandb_id}")
 
     # Inject new args into sys.argv
     if new_args:

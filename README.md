@@ -15,6 +15,10 @@ A unified PyTorch Lightning + Hydra + WandB + Submitit plugin for seamless train
   - Finds the last checkpoint in that directory.
   - Recovers the WandB ID from that directory.
   - Starts a **new** run continuing that state.
+- **Multirun Resumption**: `python run.py -m resume=path/to/multirun_dir`
+  - Detects `multirun.yaml` in the directory.
+  - Sets `hydra.sweep.dir` to that directory, allowing you to resume or extend an existing sweep.
+  - *Note: You must include the `-m` (or `--multirun`) flag when resuming a multirun.*
 
 ## Installation
 
