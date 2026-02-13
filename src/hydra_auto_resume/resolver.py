@@ -35,29 +35,33 @@ def resolve(
         print("[HydraAutoResume] Warning: Could not retrieve Hydra output dir.")
         return None, None
 
-    # --- Priority 1: Slurm/Submitit Auto-Resume ---
+    # --- Priority 1: Slurm/Submitit Auto-Resume or Manual AUTO Signal ---
     # We check if we are in a resumed job context.
     # The surest sign is if we are running in a directory that ALREADY has a checkpoint.
-    # CRITICAL: We also ensure we are actually IN a Slurm job to avoid local accidents.
+    # We allow this if:
+    # 1. We are in a Slurm job (to avoid accidental resumes on local dev)
+    # 2. We explicitly received 'AUTO' as ckpt_path (e.g. from multirun bootstrapper)
 
     is_slurm = "SLURM_JOB_ID" in os.environ
+    is_manual_auto = cfg.get(config_ckpt_path_key) == "AUTO"
+
     candidates = checkpoint_names
     local_ckpt = None
 
-    if is_slurm:
+    if is_slurm or is_manual_auto:
         for name in candidates:
             p = log_dir / checkpoint_dir / name
             if p.exists():
                 local_ckpt = str(p)
                 break
 
-    # Verification: If we found a local checkpoint AND we are in Slurm, we MUST use it.
-    # This implies the job crashed/timed-out and is restarting in the same directory.
+    # Verification: If we found a local checkpoint, we use it.
     if local_ckpt:
         print(
             f"[HydraAutoResume] Found existing checkpoint in output dir: {local_ckpt}"
         )
-        print("[HydraAutoResume] Assuming auto-resume from preemption/timeout.")
+        if is_slurm:
+            print("[HydraAutoResume] Assuming auto-resume from preemption/timeout.")
 
         # Try to recover WandB ID from this directory to continue the same run
         recovered_id = recover_id_from_dir(log_dir, checkpoint_dir_name=checkpoint_dir)
@@ -68,6 +72,9 @@ def resolve(
     # by our bootstrapper (or manually by the user).
 
     ckpt_path = cfg.get(config_ckpt_path_key)
+    if ckpt_path == "AUTO":
+        ckpt_path = None
+
     wandb_id = cfg.get(config_wandb_id_key)
 
     # Special Case: User provided WandB ID but NO checkpoint path.

@@ -73,12 +73,43 @@ def bootstrap(
 
             # Check for multirun
             if (log_dir / "multirun.yaml").exists():
-                print(f"[HydraAutoResume] Resuming from Multirun Directory: {resume_val}")
+                print(
+                    f"[HydraAutoResume] Resuming from Multirun Directory: {resume_val}"
+                )
                 new_args.append(f"hydra.sweep.dir={log_dir}")
+                new_args.append(f"++{config_ckpt_path_key}=AUTO")
                 if "-m" not in sys.argv and "--multirun" not in sys.argv:
                     print(
-                        "[HydraAutoResume] Warning: Resuming a multirun but '-m' flag is missing."
-                        " Please add '-m' to your command."
+                        "[HydraAutoResume] Resuming a multirun: "
+                        "Automatically adding '-m' flag."
+                    )
+                    new_args.insert(0, "-m")
+
+                # Load overrides from multirun.yaml
+                multirun_yaml = log_dir / "multirun.yaml"
+                try:
+                    resume_cfg = OmegaConf.load(multirun_yaml)
+                    if (
+                        "hydra" in resume_cfg
+                        and "overrides" in resume_cfg.hydra
+                        and "task" in resume_cfg.hydra.overrides
+                    ):
+                        overrides = resume_cfg.hydra.overrides.task
+                        print(
+                            "[HydraAutoResume] Loaded overrides from multirun.yaml:"
+                            f"{overrides}"
+                        )
+                        for arg in overrides:
+                            if "=" in arg:
+                                key = arg.split("=")[0]
+                                # Only add if user didn't explicitly set it in
+                                # current command
+                                if key not in user_keys and "resume" not in key:
+                                    new_args.append(arg)
+                except Exception as e:
+                    print(
+                        "[HydraAutoResume] Warning:"
+                        f"Failed to load overrides from {multirun_yaml}: {e}"
                     )
             else:
                 print(f"[HydraAutoResume] Resuming from Directory: {resume_val}")
@@ -102,11 +133,14 @@ def bootstrap(
                     try:
                         hydra_cfg = OmegaConf.load(hydra_yaml)
                         overrides = hydra_cfg.hydra.overrides.task
-                        print(f"[HydraAutoResume] Loaded from previous run: {overrides}")
+                        print(
+                            f"[HydraAutoResume] Loaded from previous run: {overrides}"
+                        )
                         for arg in overrides:
                             if "=" in arg:
                                 key = arg.split("=")[0]
-                                # Only add if user didn't explicitly set it in current cmd
+                                # Only add if user didn't explicitly set it in
+                                # current command
                                 if key not in user_keys and "resume" not in key:
                                     new_args.append(arg)
                     except Exception as e:
