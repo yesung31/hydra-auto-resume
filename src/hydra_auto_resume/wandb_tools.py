@@ -13,14 +13,14 @@ def _get_project_name(project_name=None):
     return project_name or Path.cwd().name
 
 
-def recover_id_from_dir(log_path):
+def recover_id_from_dir(log_path, checkpoint_dir_name="checkpoints"):
     """
     Attempts to recover a WandB ID from a local log directory.
     Checks inside 'wandb/latest-run' or scans the 'wandb' directory.
     """
     path = Path(log_path)
     # Handle case where log_path is the 'checkpoints' dir or a file
-    if path.name == "checkpoints":
+    if path.name == checkpoint_dir_name:
         path = path.parent
     if path.is_file():
         path = path.parent
@@ -45,7 +45,15 @@ def recover_id_from_dir(log_path):
     return None
 
 
-def download_ckpt(wandb_id, download_dir, project_name=None, alias="latest"):
+def download_ckpt(
+    wandb_id,
+    download_dir,
+    project_name=None,
+    artifact_type="model",
+    alias="latest",
+    ckpt_pattern="*.ckpt",
+    target_filename="wandb.ckpt",
+):
     """
     Downloads the model checkpoint from a specific WandB run.
     """
@@ -57,7 +65,7 @@ def download_ckpt(wandb_id, download_dir, project_name=None, alias="latest"):
         print(f"Error: Could not access run {project_name}/{wandb_id}")
         return None
 
-    artifacts = [a for a in run.logged_artifacts() if a.type == "model"]
+    artifacts = [a for a in run.logged_artifacts() if a.type == artifact_type]
 
     # Try to find alias (e.g., 'latest' or 'best')
     target = next((a for a in artifacts if alias in a.aliases), None)
@@ -71,13 +79,16 @@ def download_ckpt(wandb_id, download_dir, project_name=None, alias="latest"):
         target.download(root=str(download_dir))
 
         # Find the actual .ckpt file
-        ckpts = list(download_dir.glob("*.ckpt"))
+        ckpts = list(download_dir.glob(ckpt_pattern))
         if ckpts:
-            # Rename to wandb.ckpt
-            ckpt_path = ckpts[0]
-            new_path = download_dir / "wandb.ckpt"
-            ckpt_path.rename(new_path)
-            return str(new_path)
+            if target_filename:
+                # Rename to target_filename
+                ckpt_path = ckpts[0]
+                new_path = download_dir / target_filename
+                ckpt_path.rename(new_path)
+                return str(new_path)
+            else:
+                return str(ckpts[0])
 
     return None
 

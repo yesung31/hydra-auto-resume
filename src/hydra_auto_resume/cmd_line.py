@@ -6,11 +6,21 @@ from omegaconf import OmegaConf
 from .wandb_tools import download_config, recover_id_from_dir
 
 
-def bootstrap(resume_arg_name="resume"):
+def bootstrap(
+    resume_arg_name="resume",
+    checkpoint_dir="checkpoints",
+    checkpoint_names=None,
+    checkpoint_ext=".ckpt",
+    config_ckpt_path_key="ckpt_path",
+    config_wandb_id_key="wandb_id",
+):
     """
     Parses sys.argv for the resume argument.
     Modifies sys.argv in-place to inject configuration based on the resume target.
     """
+    if checkpoint_names is None:
+        checkpoint_names = ["hpc_ckpt.ckpt", "last.ckpt"]
+
     # Simple manual parse to find resume=... without triggering Hydra
     resume_val = None
 
@@ -42,21 +52,21 @@ def bootstrap(resume_arg_name="resume"):
             if (
                 key not in user_keys
                 and "resume" not in key
-                and "ckpt" not in key
-                and "wandb_id" not in key
+                and config_ckpt_path_key not in key
+                and config_wandb_id_key not in key
             ):
                 new_args.append(arg)
 
-        new_args.append(f"++wandb_id={wandb_id}")
+        new_args.append(f"++{config_wandb_id_key}={wandb_id}")
 
     # 2. Check if it's a Checkpoint File OR Log Directory
     else:
         path_val = Path(resume_val).resolve()
 
-        if path_val.is_file() and str(path_val).endswith(".ckpt"):
+        if path_val.is_file() and str(path_val).endswith(checkpoint_ext):
             print(f"[HydraAutoResume] Resuming from Checkpoint File: {resume_val}")
             # Case A: Checkpoint File -> Fresh Run, Default Config, Load Weights
-            new_args.append(f"++ckpt_path={path_val}")
+            new_args.append(f"++{config_ckpt_path_key}={path_val}")
 
         elif path_val.is_dir():
             print(f"[HydraAutoResume] Resuming from Directory: {resume_val}")
@@ -68,12 +78,12 @@ def bootstrap(resume_arg_name="resume"):
 
             # 2. Find checkpoint
             ckpt_path = None
-            for name in ["hpc_ckpt.ckpt", "last.ckpt"]:
-                if (log_dir / "checkpoints" / name).exists():
-                    ckpt_path = str(log_dir / "checkpoints" / name)
+            for name in checkpoint_names:
+                if (log_dir / checkpoint_dir / name).exists():
+                    ckpt_path = str(log_dir / checkpoint_dir / name)
                     break
             if ckpt_path:
-                new_args.append(f"++ckpt_path={ckpt_path}")
+                new_args.append(f"++{config_ckpt_path_key}={ckpt_path}")
 
             # 3. Load config overrides from hydra.yaml
             hydra_yaml = log_dir / ".hydra" / "hydra.yaml"
@@ -95,9 +105,9 @@ def bootstrap(resume_arg_name="resume"):
                     )
 
             # 4. Recover WandB ID to resume the same run
-            wandb_id = recover_id_from_dir(log_dir)
+            wandb_id = recover_id_from_dir(log_dir, checkpoint_dir_name=checkpoint_dir)
             if wandb_id:
-                new_args.append(f"++wandb_id={wandb_id}")
+                new_args.append(f"++{config_wandb_id_key}={wandb_id}")
 
     # Inject new args into sys.argv
     if new_args:

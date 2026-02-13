@@ -41,6 +41,34 @@ if __name__ == "__main__":
     main()
 ```
 
+### Configuration
+
+The `@auto_resume` decorator accepts several arguments to customize behavior for your project's conventions:
+
+| Argument | Default | Description |
+| :--- | :--- | :--- |
+| `resume_arg_name` | `"resume"` | The CLI argument name to trigger resumption (e.g., `resume=ID`). |
+| `checkpoint_dir` | `"checkpoints"` | Directory name where checkpoints are stored inside the log directory. |
+| `checkpoint_names` | `["hpc_ckpt.ckpt", "last.ckpt"]` | List of checkpoint filenames to look for during auto-recovery. |
+| `checkpoint_ext` | `".ckpt"` | File extension to identify checkpoint files when providing a path. |
+| `wandb_artifact_type` | `"model"` | The WandB artifact type to search for when downloading. |
+| `wandb_artifact_alias` | `"latest"` | The alias of the artifact version to download. |
+| `wandb_ckpt_pattern` | `"*.ckpt"` | Glob pattern to find the checkpoint file inside the downloaded artifact directory. |
+| `wandb_ckpt_target_filename` | `"wandb.ckpt"` | Filename to rename the downloaded checkpoint to. |
+| `config_ckpt_path_key` | `"ckpt_path"` | The key in `cfg` where the resolved checkpoint path will be stored (supports dot notation, e.g. `model.weights`). |
+| `config_wandb_id_key` | `"wandb_id"` | The key in `cfg` where the resolved WandB ID will be stored. |
+
+```python
+@auto_resume(
+    config_ckpt_path_key="model.resume_from_checkpoint",
+    wandb_artifact_type="model-weights",
+    checkpoint_names=["last.pt", "best.pt"]
+)
+@hydra.main(...)
+def main(cfg):
+    ...
+```
+
 ## How it works
 
 1.  **Bootstrapping (Pre-Hydra)**: The `@auto_resume` decorator scans `sys.argv` before Hydra parses them.
