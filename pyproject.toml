@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A Hydra plugin for unified checkpoint resumption with WandB and Slurm."
 readme = "README.md"
 authors = [
-  { name = "Yesung Hwang", email = "y.hwang@student.tue.nl" },
+  { name = "Yesung Hwang", email = "yesung.hw@gmail.com" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
