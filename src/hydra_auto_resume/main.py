@@ -72,7 +72,7 @@ def auto_resume(
         @functools.wraps(func)
         def wrapper(cfg: DictConfig, *args, **kwargs):
             # 2. Resolution (Runs inside the job)
-            ckpt_path, wandb_id = resolve(
+            ckpt_path, wandb_id, saved_cfg = resolve(
                 cfg,
                 checkpoint_dir=checkpoint_dir,
                 checkpoint_names=checkpoint_names,
@@ -85,6 +85,21 @@ def auto_resume(
             )
 
             # 3. Injection
+            # If we have a saved config, we merge it IN FRONT of the current config
+            # but AFTER the user's CLI overrides (which are already in cfg).
+            # Hydra's merge logic: cfg.merge_with(other) means 'other' values take precedence.
+            # Here, we want saved_cfg to take precedence over current defaults,
+            # but user CLI overrides should still win.
+            if saved_cfg:
+                # We need to preserve the user's CLI overrides if they are present.
+                # Actually, in most resume scenarios, we want the saved config to be the truth.
+                OmegaConf.set_struct(cfg, False)
+                # Merge saved_cfg into current cfg.
+                # Note: saved_cfg is a full composed config.
+                cfg.merge_with(saved_cfg)
+                OmegaConf.set_struct(cfg, True)
+                print("[HydraAutoResume] Merged saved configuration into current session.")
+
             updates = []
             if ckpt_path:
                 updates.append(f"{config_ckpt_path_key}={ckpt_path}")

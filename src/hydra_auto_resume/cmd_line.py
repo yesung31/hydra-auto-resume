@@ -84,8 +84,14 @@ def bootstrap(
         if key not in user_keys and key not in injected_keys:
             # Resuming an override usually means we want to FORCE it (++)
             # to avoid "Multiple values" errors if the base config already defines it.
-            if force_override and arg.startswith("+") and not arg.startswith("++"):
-                arg = "+" + arg
+            # However, for config groups (which usually contain a '/'),
+            # '++' is often not supported for adding/overriding them.
+            if (
+                force_override
+                and "/" not in key
+                and not any(arg.startswith(p) for p in ["+", "++", "~"])
+            ):
+                arg = "++" + arg
             new_args.append(arg)
             injected_keys[key] = arg
 
