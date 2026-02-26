@@ -86,12 +86,15 @@ def bootstrap(
             # to avoid "Multiple values" errors if the base config already defines it.
             # However, for config groups (which usually contain a '/'),
             # '++' is often not supported for adding/overriding them.
-            if (
-                force_override
-                and "/" not in key
-                and not any(arg.startswith(p) for p in ["+", "++", "~"])
-            ):
-                arg = "++" + arg
+            # Instead, we strip the '+' to make it a standard override if it was an 'add'.
+            is_config_group = "/" in key
+            if force_override:
+                if is_config_group:
+                    # Strip '+' from '+group=option' to make it 'group=option'
+                    if arg.startswith("+") and not arg.startswith("++"):
+                        arg = arg[1:]
+                elif not any(arg.startswith(p) for p in ["+", "++", "~"]):
+                    arg = "++" + arg
             new_args.append(arg)
             injected_keys[key] = arg
 
