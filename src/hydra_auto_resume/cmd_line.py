@@ -36,6 +36,7 @@ def bootstrap(
     checkpoint_ext=".ckpt",
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
+    no_overwrite=False,
 ):
     """
     Parses sys.argv for the resume argument and modifies it in-place to inject
@@ -56,6 +57,9 @@ def bootstrap(
         hydra.sweep.dir and the '-m' flag if necessary.
     5.  Argument Order: Injects new arguments after the script name but before the
         original user-provided CLI arguments.
+    6.  No Overwrite Mode: If no_overwrite is True, skips backing up configs and forcing
+        the run directory. This is useful for evaluation runs that should not touch
+        original run data.
     """
     if checkpoint_names is None:
         checkpoint_names = ["hpc_ckpt.ckpt", "last.ckpt"]
@@ -127,7 +131,9 @@ def bootstrap(
                 print(
                     f"[HydraAutoResume] Resuming from Multirun Directory: {resume_val}"
                 )
-                add_arg(f"hydra.sweep.dir={log_dir}")
+                if not no_overwrite:
+                    add_arg(f"hydra.sweep.dir={log_dir}")
+
                 add_arg(f"++{config_ckpt_path_key}=AUTO")
 
                 if "-m" not in sys.argv and "--multirun" not in sys.argv:
@@ -166,10 +172,13 @@ def bootstrap(
                 # Case B: Directory -> In-Place Resume, Old Config, Append Logs
 
                 # Backup configs before Hydra overwrites them
-                backup_hydra_configs(log_dir)
+                if not no_overwrite:
+                    backup_hydra_configs(log_dir)
 
-                # 1. Force Hydra to run in the same directory
-                add_arg(f"hydra.run.dir={log_dir}")
+                    # 1. Force Hydra to run in the same directory
+                    add_arg(f"hydra.run.dir={log_dir}")
+                else:
+                    print("[HydraAutoResume] Evaluation mode detected (no-overwrite).")
 
                 # 2. Find checkpoint
                 ckpt_path = None

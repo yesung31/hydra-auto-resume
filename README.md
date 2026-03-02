@@ -60,12 +60,14 @@ The `@auto_resume` decorator accepts several arguments to customize behavior for
 | `wandb_ckpt_target_filename` | `"wandb.ckpt"` | Filename to rename the downloaded checkpoint to. |
 | `config_ckpt_path_key` | `"ckpt_path"` | The key in `cfg` where the resolved checkpoint path will be stored (supports dot notation, e.g. `model.weights`). |
 | `config_wandb_id_key` | `"wandb_id"` | The key in `cfg` where the resolved WandB ID will be stored. |
+| `no_overwrite` | `False` | If `True`, disables in-place resumption (no config backup, no run dir forcing). Useful for evaluation runs. |
 
 ```python
 @auto_resume(
     config_ckpt_path_key="model.resume_from_checkpoint",
     wandb_artifact_type="model-weights",
-    checkpoint_names=["last.pt", "best.pt"]
+    checkpoint_names=["last.pt", "best.pt"],
+    no_overwrite=True  # For evaluation runs
 )
 @hydra.main(...)
 def main(cfg):

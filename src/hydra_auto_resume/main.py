@@ -17,6 +17,7 @@ def auto_resume(
     wandb_ckpt_target_filename="wandb.ckpt",
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
+    no_overwrite=False,
 ):
     """
     Decorator for Hydra's main function to enable unified auto-resumption logic.
@@ -48,6 +49,8 @@ def auto_resume(
             path should be stored. Supports dot notation (e.g., "model.resume_path"). Default is "ckpt_path".
         config_wandb_id_key (str): The key in the Hydra configuration `cfg` where the resolved WandB run ID
             should be stored. Default is "wandb_id".
+        no_overwrite (bool): If True, disables in-place resumption (no config backup, no run dir forcing).
+            Useful for evaluation runs. Default is False.
 
     Usage:
         @auto_resume(config_ckpt_path_key="model.weights", checkpoint_names=["last.pt"])
@@ -66,6 +69,7 @@ def auto_resume(
         checkpoint_ext=checkpoint_ext,
         config_ckpt_path_key=config_ckpt_path_key,
         config_wandb_id_key=config_wandb_id_key,
+        no_overwrite=no_overwrite,
     )
 
     def decorator(func):
@@ -98,7 +102,9 @@ def auto_resume(
                 # Note: saved_cfg is a full composed config.
                 cfg.merge_with(saved_cfg)
                 OmegaConf.set_struct(cfg, True)
-                print("[HydraAutoResume] Merged saved configuration into current session.")
+                print(
+                    "[HydraAutoResume] Merged saved configuration into current session."
+                )
 
             updates = []
             if ckpt_path:
