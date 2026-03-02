@@ -120,10 +120,13 @@ def resolve(
             ckpt_path = downloaded
             print(f"[HydraAutoResume] Downloaded checkpoint to: {ckpt_path}")
         else:
-            print(
-                "[HydraAutoResume] Warning:"
-                f"Could not download checkpoint for ID {wandb_id}"
+            raise RuntimeError(
+                f"[HydraAutoResume] Could not download checkpoint for WandB ID {wandb_id}"
             )
+
+    # If ckpt_path was provided (e.g. from bootstrap or manual), verify it exists
+    if ckpt_path and not Path(ckpt_path).exists():
+         raise FileNotFoundError(f"[HydraAutoResume] Resolved checkpoint path does not exist: {ckpt_path}")
 
     saved_cfg = None
     if use_saved_config and original_dir:

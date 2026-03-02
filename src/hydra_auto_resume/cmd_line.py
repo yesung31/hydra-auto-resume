@@ -111,6 +111,8 @@ def bootstrap(
         # Download previous config args
         if not use_saved_config:
             launch_args = download_config(wandb_id)
+            if launch_args is None:
+                raise ValueError(f"[HydraAutoResume] Could not find WandB run with ID: {wandb_id}")
             for arg in launch_args:
                 add_arg(arg, force_override=True)
 
@@ -119,6 +121,8 @@ def bootstrap(
     # 2. Check if it's a Checkpoint File OR Log Directory
     else:
         path_val = Path(resume_val).resolve()
+        if not path_val.exists():
+            raise FileNotFoundError(f"[HydraAutoResume] Resume target not found: {resume_val}")
 
         if path_val.is_file() and str(path_val).endswith(checkpoint_ext):
             print(f"[HydraAutoResume] Resuming from Checkpoint File: {resume_val}")
