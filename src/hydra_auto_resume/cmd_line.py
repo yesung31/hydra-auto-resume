@@ -36,7 +36,7 @@ def bootstrap(
     checkpoint_ext=".ckpt",
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
-    no_overwrite=False,
+    no_log=False,
 ):
     """
     Parses sys.argv for the resume argument and modifies it in-place to inject
@@ -57,9 +57,9 @@ def bootstrap(
         hydra.sweep.dir and the '-m' flag if necessary.
     5.  Argument Order: Injects new arguments after the script name but before the
         original user-provided CLI arguments.
-    6.  No Overwrite Mode: If no_overwrite is True, skips backing up configs and forcing
-        the run directory. This is useful for evaluation runs that should not touch
-        original run data.
+    6.  No Log Mode: If no_log is True, skips backing up configs and forcing
+        the run directory. Instead, it disables Hydra's output directory creation.
+        This is useful for evaluation runs.
     """
     if checkpoint_names is None:
         checkpoint_names = ["hpc_ckpt.ckpt", "last.ckpt"]
@@ -123,16 +123,37 @@ def bootstrap(
             # Case A: Checkpoint File -> Fresh Run, Default Config, Load Weights
             add_arg(f"++{config_ckpt_path_key}={path_val}")
 
+            # Try to find the log dir to load config from
+            log_dir = (
+                path_val.parent.parent
+                if path_val.parent.name == checkpoint_dir
+                else path_val.parent
+            )
+            if (log_dir / ".hydra").exists():
+                add_arg(f"++hydra_auto_resume.original_dir={log_dir}")
+
+            if no_log:
+                print("[HydraAutoResume] Evaluation mode detected (no-log).")
+                add_arg("hydra.run.dir=.")
+                add_arg("hydra.output_subdir=null")
+                add_arg("hydra.job.chdir=False")
+
         elif path_val.is_dir():
             log_dir = path_val
+            add_arg(f"++hydra_auto_resume.original_dir={log_dir}")
 
             # Check for multirun
             if (log_dir / "multirun.yaml").exists():
                 print(
                     f"[HydraAutoResume] Resuming from Multirun Directory: {resume_val}"
                 )
-                if not no_overwrite:
+                if not no_log:
                     add_arg(f"hydra.sweep.dir={log_dir}")
+                else:
+                    print("[HydraAutoResume] Evaluation mode detected (no-log).")
+                    add_arg("hydra.sweep.dir=.")
+                    add_arg("hydra.output_subdir=null")
+                    add_arg("hydra.job.chdir=False")
 
                 add_arg(f"++{config_ckpt_path_key}=AUTO")
 
@@ -172,13 +193,16 @@ def bootstrap(
                 # Case B: Directory -> In-Place Resume, Old Config, Append Logs
 
                 # Backup configs before Hydra overwrites them
-                if not no_overwrite:
+                if not no_log:
                     backup_hydra_configs(log_dir)
 
                     # 1. Force Hydra to run in the same directory
                     add_arg(f"hydra.run.dir={log_dir}")
                 else:
-                    print("[HydraAutoResume] Evaluation mode detected (no-overwrite).")
+                    print("[HydraAutoResume] Evaluation mode detected (no-log).")
+                    add_arg("hydra.run.dir=.")
+                    add_arg("hydra.output_subdir=null")
+                    add_arg("hydra.job.chdir=False")
 
                 # 2. Find checkpoint
                 ckpt_path = None

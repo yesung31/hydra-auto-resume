@@ -17,6 +17,7 @@ def resolve(
     wandb_ckpt_target_filename="wandb.ckpt",
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
+    load_config=False,
 ):
     """
     Resolves the checkpoint path and WandB ID for the current run.
@@ -33,7 +34,12 @@ def resolve(
         log_dir = Path(hydra_cfg.runtime.output_dir)
     except Exception:
         print("[HydraAutoResume] Warning: Could not retrieve Hydra output dir.")
-        return None, None, None
+        log_dir = Path(".")
+
+    # Try to get original_dir from config if injected by bootstrap
+    original_dir = None
+    if "hydra_auto_resume" in cfg and "original_dir" in cfg.hydra_auto_resume:
+        original_dir = Path(cfg.hydra_auto_resume.original_dir)
 
     # --- Priority 1: Slurm/Submitit Auto-Resume or Manual AUTO Signal ---
     # We check if we are in a resumed job context.
@@ -119,4 +125,16 @@ def resolve(
                 f"Could not download checkpoint for ID {wandb_id}"
             )
 
-    return ckpt_path, wandb_id, None
+    saved_cfg = None
+    if load_config and original_dir:
+        saved_cfg_path = original_dir / ".hydra" / "config.yaml"
+        if saved_cfg_path.exists():
+            from omegaconf import OmegaConf
+
+            try:
+                saved_cfg = OmegaConf.load(saved_cfg_path)
+                print(f"[HydraAutoResume] Loaded saved config from {saved_cfg_path}")
+            except Exception as e:
+                print(f"[HydraAutoResume] Warning: Failed to load {saved_cfg_path}: {e}")
+
+    return ckpt_path, wandb_id, saved_cfg

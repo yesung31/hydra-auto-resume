@@ -17,7 +17,9 @@ def auto_resume(
     wandb_ckpt_target_filename="wandb.ckpt",
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
-    no_overwrite=False,
+    no_log=False,
+    load_config=None,
+    no_overwrite=None,
 ):
     """
     Decorator for Hydra's main function to enable unified auto-resumption logic.
@@ -49,8 +51,11 @@ def auto_resume(
             path should be stored. Supports dot notation (e.g., "model.resume_path"). Default is "ckpt_path".
         config_wandb_id_key (str): The key in the Hydra configuration `cfg` where the resolved WandB run ID
             should be stored. Default is "wandb_id".
-        no_overwrite (bool): If True, disables in-place resumption (no config backup, no run dir forcing).
+        no_log (bool): If True, disables Hydra's log directory creation and in-place resumption.
             Useful for evaluation runs. Default is False.
+        load_config (bool | None): If True, loads the full configuration from the resumed session's
+            .hydra/config.yaml. If None, it defaults to True if no_log is True.
+        no_overwrite (bool | None): Deprecated alias for no_log.
 
     Usage:
         @auto_resume(config_ckpt_path_key="model.weights", checkpoint_names=["last.pt"])
@@ -61,6 +66,12 @@ def auto_resume(
     if checkpoint_names is None:
         checkpoint_names = ["hpc_ckpt.ckpt", "last.ckpt"]
 
+    if no_overwrite is not None:
+        no_log = no_overwrite
+
+    if load_config is None:
+        load_config = no_log
+
     # 1. Bootstrapping (Runs immediately when module is imported/decorated)
     bootstrap(
         resume_arg_name=resume_arg_name,
@@ -69,7 +80,7 @@ def auto_resume(
         checkpoint_ext=checkpoint_ext,
         config_ckpt_path_key=config_ckpt_path_key,
         config_wandb_id_key=config_wandb_id_key,
-        no_overwrite=no_overwrite,
+        no_log=no_log,
     )
 
     def decorator(func):
@@ -86,6 +97,7 @@ def auto_resume(
                 wandb_ckpt_target_filename=wandb_ckpt_target_filename,
                 config_ckpt_path_key=config_ckpt_path_key,
                 config_wandb_id_key=config_wandb_id_key,
+                load_config=load_config,
             )
 
             # 3. Injection
