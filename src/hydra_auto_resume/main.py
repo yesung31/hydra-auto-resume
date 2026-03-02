@@ -15,6 +15,7 @@ def auto_resume(
     wandb_artifact_alias="latest",
     wandb_ckpt_pattern="*.ckpt",
     wandb_ckpt_target_filename="wandb.ckpt",
+    config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
     no_log=False,
     use_saved_config=False,
