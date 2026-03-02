@@ -37,6 +37,7 @@ def bootstrap(
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
     no_log=False,
+    use_saved_config=False,
 ):
     """
     Parses sys.argv for the resume argument and modifies it in-place to inject
@@ -108,9 +109,10 @@ def bootstrap(
         print(f"[HydraAutoResume] Resuming from WandB ID: {wandb_id}")
 
         # Download previous config args
-        launch_args = download_config(wandb_id)
-        for arg in launch_args:
-            add_arg(arg, force_override=True)
+        if not use_saved_config:
+            launch_args = download_config(wandb_id)
+            for arg in launch_args:
+                add_arg(arg, force_override=True)
 
         add_arg(f"++{config_wandb_id_key}={wandb_id}")
 
@@ -168,26 +170,27 @@ def bootstrap(
                         injected_keys["-m"] = "-m"
 
                 # Load overrides from multirun.yaml
-                multirun_yaml = log_dir / "multirun.yaml"
-                try:
-                    resume_cfg = OmegaConf.load(multirun_yaml)
-                    if (
-                        "hydra" in resume_cfg
-                        and "overrides" in resume_cfg.hydra
-                        and "task" in resume_cfg.hydra.overrides
-                    ):
-                        overrides = resume_cfg.hydra.overrides.task
+                if not use_saved_config:
+                    multirun_yaml = log_dir / "multirun.yaml"
+                    try:
+                        resume_cfg = OmegaConf.load(multirun_yaml)
+                        if (
+                            "hydra" in resume_cfg
+                            and "overrides" in resume_cfg.hydra
+                            and "task" in resume_cfg.hydra.overrides
+                        ):
+                            overrides = resume_cfg.hydra.overrides.task
+                            print(
+                                "[HydraAutoResume] Loaded overrides from multirun.yaml: "
+                                f"{overrides}"
+                            )
+                            for arg in overrides:
+                                add_arg(arg, force_override=True)
+                    except Exception as e:
                         print(
-                            "[HydraAutoResume] Loaded overrides from multirun.yaml: "
-                            f"{overrides}"
+                            "[HydraAutoResume] Warning: "
+                            f"Failed to load overrides from {multirun_yaml}: {e}"
                         )
-                        for arg in overrides:
-                            add_arg(arg, force_override=True)
-                except Exception as e:
-                    print(
-                        "[HydraAutoResume] Warning: "
-                        f"Failed to load overrides from {multirun_yaml}: {e}"
-                    )
             else:
                 print(f"[HydraAutoResume] Resuming from Directory: {resume_val}")
                 # Case B: Directory -> In-Place Resume, Old Config, Append Logs
@@ -214,21 +217,22 @@ def bootstrap(
                     add_arg(f"++{config_ckpt_path_key}={ckpt_path}")
 
                 # 3. Load config overrides from hydra.yaml
-                hydra_yaml = log_dir / ".hydra" / "hydra.yaml"
-                if hydra_yaml.exists():
-                    try:
-                        hydra_cfg = OmegaConf.load(hydra_yaml)
-                        overrides = hydra_cfg.hydra.overrides.task
-                        print(
-                            f"[HydraAutoResume] Loaded from previous run: {overrides}"
-                        )
-                        for arg in overrides:
-                            add_arg(arg, force_override=True)
-                    except Exception as e:
-                        print(
-                            "[HydraAutoResume] Warning: "
-                            f"Failed to load overrides from {hydra_yaml}: {e}"
-                        )
+                if not use_saved_config:
+                    hydra_yaml = log_dir / ".hydra" / "hydra.yaml"
+                    if hydra_yaml.exists():
+                        try:
+                            hydra_cfg = OmegaConf.load(hydra_yaml)
+                            overrides = hydra_cfg.hydra.overrides.task
+                            print(
+                                f"[HydraAutoResume] Loaded from previous run: {overrides}"
+                            )
+                            for arg in overrides:
+                                add_arg(arg, force_override=True)
+                        except Exception as e:
+                            print(
+                                "[HydraAutoResume] Warning: "
+                                f"Failed to load overrides from {hydra_yaml}: {e}"
+                            )
 
     # Inject new args into sys.argv
     clean_argv = [arg for arg in sys.argv if not arg.startswith(f"{resume_arg_name}=")]

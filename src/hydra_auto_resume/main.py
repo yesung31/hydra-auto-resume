@@ -18,7 +18,7 @@ def auto_resume(
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
     no_log=False,
-    load_config=None,
+    use_saved_config=None,
     no_overwrite=None,
 ):
     """
@@ -53,8 +53,9 @@ def auto_resume(
             should be stored. Default is "wandb_id".
         no_log (bool): If True, disables Hydra's log directory creation and in-place resumption.
             Useful for evaluation runs. Default is False.
-        load_config (bool | None): If True, loads the full configuration from the resumed session's
-            .hydra/config.yaml. If None, it defaults to True if no_log is True.
+        use_saved_config (bool | None): If True, loads the already-composed configuration from the
+            resumed session's .hydra/config.yaml instead of re-composing it from the current project files
+            and overrides. If None, it defaults to True if no_log is True.
         no_overwrite (bool | None): Deprecated alias for no_log.
 
     Usage:
@@ -69,8 +70,8 @@ def auto_resume(
     if no_overwrite is not None:
         no_log = no_overwrite
 
-    if load_config is None:
-        load_config = no_log
+    if use_saved_config is None:
+        use_saved_config = no_log
 
     # 1. Bootstrapping (Runs immediately when module is imported/decorated)
     bootstrap(
@@ -81,6 +82,7 @@ def auto_resume(
         config_ckpt_path_key=config_ckpt_path_key,
         config_wandb_id_key=config_wandb_id_key,
         no_log=no_log,
+        use_saved_config=use_saved_config,
     )
 
     def decorator(func):
@@ -97,7 +99,7 @@ def auto_resume(
                 wandb_ckpt_target_filename=wandb_ckpt_target_filename,
                 config_ckpt_path_key=config_ckpt_path_key,
                 config_wandb_id_key=config_wandb_id_key,
-                load_config=load_config,
+                use_saved_config=use_saved_config,
             )
 
             # 3. Injection

@@ -17,7 +17,7 @@ def resolve(
     wandb_ckpt_target_filename="wandb.ckpt",
     config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
-    load_config=False,
+    use_saved_config=False,
 ):
     """
     Resolves the checkpoint path and WandB ID for the current run.
@@ -126,7 +126,7 @@ def resolve(
             )
 
     saved_cfg = None
-    if load_config and original_dir:
+    if use_saved_config and original_dir:
         saved_cfg_path = original_dir / ".hydra" / "config.yaml"
         if saved_cfg_path.exists():
             from omegaconf import OmegaConf

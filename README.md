@@ -61,7 +61,7 @@ The `@auto_resume` decorator accepts several arguments to customize behavior for
 | `config_ckpt_path_key` | `"ckpt_path"` | The key in `cfg` where the resolved checkpoint path will be stored (supports dot notation, e.g. `model.weights`). |
 | `config_wandb_id_key` | `"wandb_id"` | The key in `cfg` where the resolved WandB ID will be stored. |
 | `no_log` | `False` | If `True`, disables Hydra's log directory creation. Useful for evaluation runs. |
-| `load_config` | `None` | If `True`, loads the full configuration from the resumed session's `.hydra/config.yaml`. Defaults to `True` if `no_log=True`. |
+| `use_saved_config` | `None` | If `True`, loads the already-composed configuration from the resumed session's `.hydra/config.yaml` instead of re-composing it from the current project files and overrides. Defaults to `True` if `no_log=True`. |
 
 ```python
 @auto_resume(
