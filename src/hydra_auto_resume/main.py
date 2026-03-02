@@ -95,22 +95,45 @@ def auto_resume(
             )
 
             # 3. Injection
-            # If we have a saved config, we merge it IN FRONT of the current config.
-            # Hydra's merge logic: cfg.merge_with(other) means 'other' values take precedence.
-            # To ensure CLI overrides (already in 'cfg') take precedence over 'saved_cfg',
-            # we merge 'cfg' into 'saved_cfg', then replace 'cfg' content.
             if saved_cfg:
-                OmegaConf.set_struct(saved_cfg, False)
-                # Merge the CURRENT cfg (which contains CLI overrides) into saved_cfg
-                saved_cfg.merge_with(cfg)
+                # We want saved_cfg to take precedence over current defaults,
+                # BUT user CLI overrides should still win.
+                # Since 'cfg' already has (defaults + CLI overrides), we can:
+                # 1. Create a copy of saved_cfg.
+                # 2. Merge current 'cfg' into it (CLI overrides in 'cfg' will win).
+                # 3. Replace 'cfg' with the result.
                 
-                # Now saved_cfg has everything, with CLI overrides winning.
-                # Update cfg with the result.
+                OmegaConf.set_struct(saved_cfg, False)
+                
+                # To distinguish between 'default' and 'override' is hard.
+                # But if we use 'use_saved_config', we explicitly want to 
+                # discard CURRENT defaults and use SAVED ones.
+                
+                # Let's try to get ONLY CLI overrides.
+                try:
+                    import hydra.core.hydra_config
+                    hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
+                    overrides = [
+                        str(o) for o in hydra_cfg.overrides.task 
+                        if not (o.startswith(f"{resume_arg_name}=") or "hydra_auto_resume" in o)
+                    ]
+                except Exception:
+                    overrides = []
+
+                # Create a fresh config starting from the saved one
+                new_cfg = OmegaConf.create(saved_cfg)
+                OmegaConf.set_struct(new_cfg, False)
+                
+                # Now re-apply CLI overrides (they should win)
+                if overrides:
+                    new_cfg.merge_with(OmegaConf.from_dotlist(overrides))
+                
+                # Replace cfg with saved_cfg
                 OmegaConf.set_struct(cfg, False)
-                cfg.merge_with(saved_cfg)
+                cfg.merge_with(new_cfg)
                 OmegaConf.set_struct(cfg, True)
                 print(
-                    "[HydraAutoResume] Merged saved configuration into current session (CLI overrides preserved)."
+                    f"[HydraAutoResume] Merged saved configuration (applied {len(overrides)} CLI overrides)."
                 )
 
 

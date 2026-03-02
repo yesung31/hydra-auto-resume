@@ -40,6 +40,10 @@ def resolve(
     original_dir = None
     if "hydra_auto_resume" in cfg and "original_dir" in cfg.hydra_auto_resume:
         original_dir = Path(cfg.hydra_auto_resume.original_dir)
+    
+    backup_dir = None
+    if "hydra_auto_resume" in cfg and "backup_dir" in cfg.hydra_auto_resume:
+        backup_dir = Path(cfg.hydra_auto_resume.backup_dir)
 
     # --- Priority 1: Slurm/Submitit Auto-Resume or Manual AUTO Signal ---
     # We check if we are in a resumed job context.
@@ -129,9 +133,15 @@ def resolve(
          raise FileNotFoundError(f"[HydraAutoResume] Resolved checkpoint path does not exist: {ckpt_path}")
 
     saved_cfg = None
-    if use_saved_config and original_dir:
-        saved_cfg_path = original_dir / ".hydra" / "config.yaml"
-        if saved_cfg_path.exists():
+    if use_saved_config and (original_dir or backup_dir):
+        if backup_dir and backup_dir.exists():
+            saved_cfg_path = backup_dir / "config.yaml"
+        elif original_dir:
+            saved_cfg_path = original_dir / ".hydra" / "config.yaml"
+        else:
+            saved_cfg_path = None
+
+        if saved_cfg_path and saved_cfg_path.exists():
             from omegaconf import OmegaConf
 
             try:

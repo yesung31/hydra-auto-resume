@@ -25,8 +25,10 @@ def backup_hydra_configs(log_dir):
         print(f"[HydraAutoResume] Backing up existing Hydra configs to {backup_dir}")
         try:
             shutil.copytree(hydra_dir, backup_dir)
+            return backup_dir
         except Exception as e:
             print(f"[HydraAutoResume] Warning: Failed to backup .hydra: {e}")
+    return None
 
 
 def bootstrap(
@@ -201,7 +203,9 @@ def bootstrap(
 
                 # Backup configs before Hydra overwrites them
                 if not no_log:
-                    backup_hydra_configs(log_dir)
+                    backup_dir = backup_hydra_configs(log_dir)
+                    if backup_dir:
+                        add_arg(f"++hydra_auto_resume.backup_dir={backup_dir}")
 
                     # 1. Force Hydra to run in the same directory
                     add_arg(f"hydra.run.dir={log_dir}")
