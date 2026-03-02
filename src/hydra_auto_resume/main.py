@@ -15,11 +15,9 @@ def auto_resume(
     wandb_artifact_alias="latest",
     wandb_ckpt_pattern="*.ckpt",
     wandb_ckpt_target_filename="wandb.ckpt",
-    config_ckpt_path_key="ckpt_path",
     config_wandb_id_key="wandb_id",
     no_log=False,
-    use_saved_config=None,
-    no_overwrite=None,
+    use_saved_config=False,
 ):
     """
     Decorator for Hydra's main function to enable unified auto-resumption logic.
@@ -53,10 +51,9 @@ def auto_resume(
             should be stored. Default is "wandb_id".
         no_log (bool): If True, disables Hydra's log directory creation and in-place resumption.
             Useful for evaluation runs. Default is False.
-        use_saved_config (bool | None): If True, loads the already-composed configuration from the
+        use_saved_config (bool): If True, loads the already-composed configuration from the
             resumed session's .hydra/config.yaml instead of re-composing it from the current project files
-            and overrides. If None, it defaults to True if no_log is True.
-        no_overwrite (bool | None): Deprecated alias for no_log.
+            and overrides. Default is False.
 
     Usage:
         @auto_resume(config_ckpt_path_key="model.weights", checkpoint_names=["last.pt"])
@@ -66,12 +63,6 @@ def auto_resume(
     """
     if checkpoint_names is None:
         checkpoint_names = ["hpc_ckpt.ckpt", "last.ckpt"]
-
-    if no_overwrite is not None:
-        no_log = no_overwrite
-
-    if use_saved_config is None:
-        use_saved_config = no_log
 
     # 1. Bootstrapping (Runs immediately when module is imported/decorated)
     bootstrap(
@@ -103,22 +94,24 @@ def auto_resume(
             )
 
             # 3. Injection
-            # If we have a saved config, we merge it IN FRONT of the current config
-            # but AFTER the user's CLI overrides (which are already in cfg).
+            # If we have a saved config, we merge it IN FRONT of the current config.
             # Hydra's merge logic: cfg.merge_with(other) means 'other' values take precedence.
-            # Here, we want saved_cfg to take precedence over current defaults,
-            # but user CLI overrides should still win.
+            # To ensure CLI overrides (already in 'cfg') take precedence over 'saved_cfg',
+            # we merge 'cfg' into 'saved_cfg', then replace 'cfg' content.
             if saved_cfg:
-                # We need to preserve the user's CLI overrides if they are present.
-                # Actually, in most resume scenarios, we want the saved config to be the truth.
+                OmegaConf.set_struct(saved_cfg, False)
+                # Merge the CURRENT cfg (which contains CLI overrides) into saved_cfg
+                saved_cfg.merge_with(cfg)
+                
+                # Now saved_cfg has everything, with CLI overrides winning.
+                # Update cfg with the result.
                 OmegaConf.set_struct(cfg, False)
-                # Merge saved_cfg into current cfg.
-                # Note: saved_cfg is a full composed config.
                 cfg.merge_with(saved_cfg)
                 OmegaConf.set_struct(cfg, True)
                 print(
-                    "[HydraAutoResume] Merged saved configuration into current session."
+                    "[HydraAutoResume] Merged saved configuration into current session (CLI overrides preserved)."
                 )
+
 
             updates = []
             if ckpt_path:
