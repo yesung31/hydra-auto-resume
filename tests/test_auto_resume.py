@@ -55,13 +55,12 @@ def test_non_existing_target(test_env):
     assert "Resume target not found: non_existent" in result.stderr or "Resume target not found: non_existent" in result.stdout
 
 def test_no_log_true(test_env):
-    """2) no_log=true should not make any extra logs (runs in .)."""
-    # Run with no_log=True. We check that it runs in '.' and doesn't create a new folder.
+    """2) no_log=true should run in the original log directory if available."""
+    # Run with no_log=True. We check that it runs in initial_log_dir.
     result = run_app(test_env["app_dir"], ["resume=initial_run"], env_vars={"TEST_NO_LOG": "True"})
     assert result.returncode == 0
-    # On macOS tmp_path can be /private/var... or /var...
-    # We just check the end of the path
-    assert str(test_env['app_dir']).split('/')[-1] in result.stdout
+    assert "VAL_OUTPUT_DIR:" in result.stdout
+    assert "initial_run" in result.stdout
     # Check that no NEW .hydra was created in app_dir (since output_subdir=null)
     assert not (test_env["app_dir"] / ".hydra").exists()
 

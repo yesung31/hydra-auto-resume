@@ -142,7 +142,9 @@ def bootstrap(
 
             if no_log:
                 print("[HydraAutoResume] Evaluation mode detected (no-log).")
-                add_arg("hydra.run.dir=.")
+                # Even in no-log mode, if we have a log_dir (from checkpoint path), 
+                # we want to run there to save figures/results in the right place.
+                add_arg(f"hydra.run.dir={log_dir}")
                 add_arg("hydra.output_subdir=null")
                 add_arg("hydra.job.chdir=False")
 
@@ -211,7 +213,7 @@ def bootstrap(
                     add_arg(f"hydra.run.dir={log_dir}")
                 else:
                     print("[HydraAutoResume] Evaluation mode detected (no-log).")
-                    add_arg("hydra.run.dir=.")
+                    add_arg(f"hydra.run.dir={log_dir}")
                     add_arg("hydra.output_subdir=null")
                     add_arg("hydra.job.chdir=False")
 
