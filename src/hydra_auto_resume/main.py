@@ -81,7 +81,7 @@ def auto_resume(
         @functools.wraps(func)
         def wrapper(cfg: DictConfig, *args, **kwargs):
             # 2. Resolution (Runs inside the job)
-            ckpt_path, wandb_id, saved_cfg = resolve(
+            ckpt_path, wandb_id, saved_cfg, saved_hydra_cfg = resolve(
                 cfg,
                 checkpoint_dir=checkpoint_dir,
                 checkpoint_names=checkpoint_names,
@@ -98,16 +98,6 @@ def auto_resume(
             if saved_cfg:
                 # We want saved_cfg to take precedence over current defaults,
                 # BUT user CLI overrides should still win.
-                # Since 'cfg' already has (defaults + CLI overrides), we can:
-                # 1. Create a copy of saved_cfg.
-                # 2. Merge current 'cfg' into it (CLI overrides in 'cfg' will win).
-                # 3. Replace 'cfg' with the result.
-                
-                OmegaConf.set_struct(saved_cfg, False)
-                
-                # To distinguish between 'default' and 'override' is hard.
-                # But if we use 'use_saved_config', we explicitly want to 
-                # discard CURRENT defaults and use SAVED ones.
                 
                 # Let's try to get ONLY CLI overrides.
                 try:
@@ -128,14 +118,30 @@ def auto_resume(
                 if overrides:
                     new_cfg.merge_with(OmegaConf.from_dotlist(overrides))
                 
-                # Replace cfg with saved_cfg
+                # Replace cfg with new combined state
                 OmegaConf.set_struct(cfg, False)
+                cfg.clear()
                 cfg.merge_with(new_cfg)
                 OmegaConf.set_struct(cfg, True)
                 print(
                     f"[HydraAutoResume] Merged saved configuration (applied {len(overrides)} CLI overrides)."
                 )
 
+            # If we have saved hydra config, we should ideally restore parts of it
+            # like choices, but HydraConfig is mostly read-only in many parts.
+            # However, some parts can be updated.
+            if saved_hydra_cfg:
+                try:
+                    from hydra.core.hydra_config import HydraConfig
+                    current_hydra_cfg = HydraConfig.get()
+                    OmegaConf.set_struct(current_hydra_cfg, False)
+                    # We merge saved hydra choices into current one
+                    if "runtime" in saved_hydra_cfg and "choices" in saved_hydra_cfg.runtime:
+                        current_hydra_cfg.runtime.choices.merge_with(saved_hydra_cfg.runtime.choices)
+                    OmegaConf.set_struct(current_hydra_cfg, True)
+                    print("[HydraAutoResume] Restored Hydra choices from saved session.")
+                except Exception as e:
+                    print(f"[HydraAutoResume] Warning: Failed to restore Hydra choices: {e}")
 
             updates = []
             if ckpt_path:

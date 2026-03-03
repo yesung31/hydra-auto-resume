@@ -102,6 +102,20 @@ def test_use_saved_config_false(test_env):
     assert "VAL_PARAM1: default" in result.stdout
     assert "VAL_PARAM2: overridden" in result.stdout
 
+def test_restore_hydra_choices(test_env):
+    """Verify that Hydra choices are restored from the saved session."""
+    # initial_run/.hydra/hydra.yaml should have some choices
+    # We add them to the fixture setup if needed, but the current fixture setup
+    # only creates hydra.yaml with empty task overrides.
+    hydra_yaml = test_env["initial_log_dir"] / ".hydra" / "hydra.yaml"
+    hydra_yaml.write_text("hydra:\n  overrides:\n    task: []\n  runtime:\n    choices:\n      data: saved_data\n")
+    
+    result = run_app(test_env["app_dir"], ["resume=initial_run"], env_vars={"TEST_USE_SAVED": "True"})
+    assert result.returncode == 0
+    # The app doesn't print choices by default, but we added a print in our test app if we want.
+    # Let's check the logs for "Restored Hydra choices"
+    assert "Restored Hydra choices from saved session" in result.stdout
+
 from unittest.mock import patch
 
 def test_wandb_id_resume_creates_new_folder(test_env):

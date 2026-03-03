@@ -24,7 +24,7 @@ def resolve(
     Prioritizes Slurm/Submitit auto-resume (local 'hpc_ckpt.ckpt' or 'last.ckpt').
 
     Returns:
-        (ckpt_path: str | None, wandb_id: str | None, saved_cfg: DictConfig | None)
+        (ckpt_path: str | None, wandb_id: str | None, saved_cfg: DictConfig | None, saved_hydra_cfg: DictConfig | None)
     """
     if checkpoint_names is None:
         checkpoint_names = ["hpc_ckpt.ckpt", "last.ckpt"]
@@ -78,19 +78,26 @@ def resolve(
 
         # Try to recover original configuration
         saved_cfg_path = log_dir / ".hydra" / "config.yaml"
+        saved_hydra_path = log_dir / ".hydra" / "hydra.yaml"
         saved_cfg = None
-        if saved_cfg_path.exists():
-            from omegaconf import OmegaConf
+        saved_hydra_cfg = None
+        from omegaconf import OmegaConf
 
+        if saved_cfg_path.exists():
             try:
                 saved_cfg = OmegaConf.load(saved_cfg_path)
                 print(f"[HydraAutoResume] Loaded saved config from {saved_cfg_path}")
             except Exception as e:
-                print(
-                    f"[HydraAutoResume] Warning: Failed to load {saved_cfg_path}: {e}"
-                )
+                print(f"[HydraAutoResume] Warning: Failed to load {saved_cfg_path}: {e}")
 
-        return local_ckpt, recovered_id, saved_cfg
+        if saved_hydra_path.exists():
+            try:
+                saved_hydra_cfg = OmegaConf.load(saved_hydra_path)
+                print(f"[HydraAutoResume] Loaded saved hydra config from {saved_hydra_path}")
+            except Exception as e:
+                print(f"[HydraAutoResume] Warning: Failed to load {saved_hydra_path}: {e}")
+
+        return local_ckpt, recovered_id, saved_cfg, saved_hydra_cfg
 
     # --- Priority 2: Bootstrapped Intent (Manual Resume) ---
     # If no local crash file, we look at what was injected into the config
@@ -133,21 +140,32 @@ def resolve(
          raise FileNotFoundError(f"[HydraAutoResume] Resolved checkpoint path does not exist: {ckpt_path}")
 
     saved_cfg = None
+    saved_hydra_cfg = None
     if use_saved_config and (original_dir or backup_dir):
+        # Prefer backup_dir as it contains the config BEFORE the current run started
         if backup_dir and backup_dir.exists():
             saved_cfg_path = backup_dir / "config.yaml"
+            saved_hydra_path = backup_dir / "hydra.yaml"
         elif original_dir:
             saved_cfg_path = original_dir / ".hydra" / "config.yaml"
+            saved_hydra_path = original_dir / ".hydra" / "hydra.yaml"
         else:
             saved_cfg_path = None
+            saved_hydra_path = None
 
+        from omegaconf import OmegaConf
         if saved_cfg_path and saved_cfg_path.exists():
-            from omegaconf import OmegaConf
-
             try:
                 saved_cfg = OmegaConf.load(saved_cfg_path)
                 print(f"[HydraAutoResume] Loaded saved config from {saved_cfg_path}")
             except Exception as e:
                 print(f"[HydraAutoResume] Warning: Failed to load {saved_cfg_path}: {e}")
 
-    return ckpt_path, wandb_id, saved_cfg
+        if saved_hydra_path and saved_hydra_path.exists():
+            try:
+                saved_hydra_cfg = OmegaConf.load(saved_hydra_path)
+                print(f"[HydraAutoResume] Loaded saved hydra config from {saved_hydra_path}")
+            except Exception as e:
+                print(f"[HydraAutoResume] Warning: Failed to load {saved_hydra_path}: {e}")
+
+    return ckpt_path, wandb_id, saved_cfg, saved_hydra_cfg
