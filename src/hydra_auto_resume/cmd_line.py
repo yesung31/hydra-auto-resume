@@ -100,8 +100,12 @@ def bootstrap(
                     # Strip '+' from '+group=option' to make it 'group=option'
                     if arg.startswith("+") and not arg.startswith("++"):
                         arg = arg[1:]
-                elif not any(arg.startswith(p) for p in ["+", "++", "~"]):
-                    arg = "++" + arg
+                elif arg.startswith("+") and not arg.startswith("++"):
+                    # Upgrade '+' to '++' for regular params to avoid "Multiple values"
+                    # if the parameter is now defined in the config file.
+                    arg = "++" + arg[1:]
+                # Note: Plain overrides (key=val) are left as-is to avoid 
+                # "force-add of config groups is not supported" for top-level groups.
             new_args.append(arg)
             injected_keys[key] = arg
 

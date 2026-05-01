@@ -36,8 +36,12 @@ def run_app(app_dir, args, env_vars=None):
     env = os.environ.copy()
     if env_vars:
         env.update(env_vars)
-    # Ensure hydra-auto-resume is in python path if not installed
-    # But it should be installed in editable mode for these tests to work easily
+    # Ensure hydra-auto-resume is in python path
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = str(Path(__file__).parent.parent / "src") + ":" + env["PYTHONPATH"]
+    else:
+        env["PYTHONPATH"] = str(Path(__file__).parent.parent / "src")
+        
     result = subprocess.run(
         [sys.executable, str(app_dir / "app.py")] + args,
         cwd=str(app_dir),
@@ -101,27 +105,47 @@ def test_use_saved_config_false(test_env):
     assert "VAL_PARAM1: default" in result.stdout
     assert "VAL_PARAM2: overridden" in result.stdout
 
+def test_top_level_config_group_resume(test_env):
+    """Verify that top-level config groups like experiment=val are handled correctly."""
+    # 1. Setup an experiment config
+    exp_dir = test_env["app_dir"] / "configs" / "experiment"
+    exp_dir.mkdir(exist_ok=True)
+    (exp_dir / "my_exp.yaml").write_text("param_exp: experiment_val")
+    
+    # 2. Run with experiment override
+    log_dir = test_env["app_dir"] / "exp_run"
+    result = run_app(test_env["app_dir"], [
+        "experiment=my_exp",
+        f"hydra.run.dir={log_dir}"
+    ])
+    assert result.returncode == 0
+    
+    # 3. Resume from the directory
+    result = run_app(test_env["app_dir"], [f"resume={log_dir}"])
+    assert result.returncode == 0
+    # Ensure it didn't crash
+    assert "force-add of config groups is not supported" not in result.stderr
+    # Check that experiment=my_exp was injected without ++
+    assert "[HydraAutoResume] Injecting args:" in result.stdout
+    inject_line = [l for l in result.stdout.split('\n') if "Injecting args:" in l][0]
+    assert "'experiment=my_exp'" in inject_line
+    assert "'++experiment=my_exp'" not in inject_line
+
 def test_restore_hydra_choices(test_env):
     """Verify that Hydra choices are restored from the saved session."""
     # initial_run/.hydra/hydra.yaml should have some choices
-    # We add them to the fixture setup if needed, but the current fixture setup
-    # only creates hydra.yaml with empty task overrides.
     hydra_yaml = test_env["initial_log_dir"] / ".hydra" / "hydra.yaml"
     hydra_yaml.write_text("hydra:\n  overrides:\n    task: []\n  runtime:\n    choices:\n      data: saved_data\n")
     
     result = run_app(test_env["app_dir"], ["resume=initial_run"], env_vars={"TEST_USE_SAVED": "True"})
     assert result.returncode == 0
-    # The app doesn't print choices by default, but we added a print in our test app if we want.
-    # Let's check the logs for "Restored Hydra choices"
     assert "Restored Hydra choices from saved session" in result.stdout
 
 from unittest.mock import patch
 
 def test_wandb_id_resume_creates_new_folder(test_env):
-    """2c) When you resume from wandb_id, it should also create a new log folder."""
-    # We mock download_config and download_ckpt to avoid network calls
-    # We also mock WandBTool's download functions in the subprocess if we were running it
-    # But it's easier to just check that hydra.run.dir is NOT in the injected args
+    """2c) When you resume from wandb_id, it also create a new log folder."""
+    # We mock download_config to avoid network calls
     with patch("hydra_auto_resume.cmd_line.download_config", return_value=["param1=wandb"]):
         import sys
         original_argv = sys.argv[:]
@@ -131,8 +155,8 @@ def test_wandb_id_resume_creates_new_folder(test_env):
             bootstrap()
             # Check injected args in sys.argv
             assert "++wandb_id=abcdefgh" in sys.argv
-            assert "param1=wandb" in sys.argv or "++param1=wandb" in sys.argv
-            # hydra.run.dir should NOT be here because it's not a directory resume
-            assert not any("hydra.run.dir" in arg for arg in sys.argv)
+            # Note: param1=wandb should NOT be upgraded to ++ because it's a plain override
+            assert "param1=wandb" in sys.argv
+            assert "++param1=wandb" not in sys.argv
         finally:
             sys.argv = original_argv
